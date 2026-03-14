@@ -159,15 +159,50 @@ export async function POST(req: Request) {
       flights: flights.map((f: AviationStackFlight) => ({ flight: f.flight?.iata, status: f.flight_status }))
     };
 
-    const systemInstruction = `You are an expert travel planner AI. Based on the user's prompt, generate a realistic, complete, logically sequenced, and richly detailed trip itinerary. 
-Ensure realistic pacing and travel times between locations. Keep budget constraints in mind.
-Provide realistic longitudinal and latitudinal coordinates for each location in [lng, lat] format (longitude first, then latitude). If the activity is moving (like a flight), use the destination's coordinates. Use creative and suitable hex colors for budget_categories.
+    const systemInstruction = `You are an expert travel planner AI. Generate a realistic, logically sequenced trip itinerary in RAW JSON.
+Everything MUST be within a single JSON object.
 
-For bookable items (flights, events, restaurants, accommodations), provide a bookingUrl that links to the actual booking page. Use the provided API data to find real booking URLs where possible. For items that don't require booking (free activities, walking), set bookingUrl to null.
+CRITICAL: All string values MUST be enclosed in double quotes. Never output unquoted text (e.g. use "description": "Some text" not "description": Some text).
+
+CRITICAL JSON STRUCTURE:
+- Use "days" for the itinerary array.
+- Each day MUST have "id", "dayLabel", "dateStr", "activitiesCount", and "segments".
+- Each segment MUST have "id", "time", "type", "title", "location", "description", "cost", "confirmationCode", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl".
+
+EXAMPLE STRUCTURE:
+{
+  "trip_id": "paris-trip",
+  "title": "3 Days in Paris",
+  "dates": "Aug 10-12, 2026",
+  "overview": { "total_days": 3, "total_budget": 1000, "weather_summary": "Sunny" },
+  "budget_categories": [{ "category": "Food", "allocated": 300, "spent": 0, "color": "#FF5733" }],
+  "days": [
+    {
+      "id": "day-1",
+      "dayLabel": "Day 1",
+      "dateStr": "Monday, Aug 10",
+      "activitiesCount": 1,
+      "segments": [{
+        "id": "seg-1",
+        "time": "09:00 AM",
+        "type": "attraction",
+        "title": "Eiffel Tower",
+        "location": "Paris",
+        "description": "Visit the icon.",
+        "cost": 25,
+        "confirmationCode": null,
+        "travelModeToNext": "walk",
+        "distanceToNext": "500m",
+        "coordinates": [2.2945, 48.8584],
+        "bookingUrl": null
+      }]
+    }
+  ]
+}
 
 API Data: ${JSON.stringify(apiData)}
 
-CRITICAL: Your response must be a valid JSON object that strictly follows this schema:
+STRICT SCHEMA TO FOLLOW:
 ${JSON.stringify(responseSchema.schema, null, 2)}`;
 
     console.log("Calling OpenAI with baseURL:", baseURL);
@@ -177,16 +212,64 @@ ${JSON.stringify(responseSchema.schema, null, 2)}`;
         { role: "system", content: systemInstruction },
         { role: "user", content: prompt }
       ],
-      response_format: { type: "json_object" }
+      max_tokens: 12000,
+      temperature: 0.7,
     });
 
     const content = response.choices[0].message.content;
+    const finishReason = response.choices[0].finish_reason;
+
     if (content) {
       console.log("OpenAI response received successfully.");
-      const tripData = JSON.parse(content);
-      return NextResponse.json(tripData, { status: 200 });
+      try {
+        // Robust Extraction: Look for the first '{' and last '}'
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        let jsonToParse = jsonMatch ? jsonMatch[0] : content.trim();
+
+        // Attempt to fix common LLM JSON mistakes: unquoted string values like "description": Some text
+        jsonToParse = jsonToParse.replace(/:\s*([A-Za-z][^,:\[\]{}"\n]*?)(\s*[,}\]])/g, (_, val, end) => {
+          if (val.trim() && !val.startsWith('"') && !val.startsWith('null') && !val.startsWith('true') && !val.startsWith('false') && isNaN(Number(val))) {
+            return `: "${val.trim().replace(/"/g, '\\"')}"${end}`;
+          }
+          return `: ${val}${end}`;
+        });
+
+        let tripData: Record<string, unknown>;
+        try {
+          tripData = JSON.parse(jsonToParse);
+        } catch (e) {
+          // Truncation recovery: progressively strip from end to find valid JSON
+          let temp = jsonToParse.trim();
+          let success = false;
+          while (temp.length > 2) {
+            try {
+              tripData = JSON.parse(temp);
+              success = true;
+              break;
+            } catch {
+              temp = temp.slice(0, -1).trim();
+            }
+          }
+          if (!success) throw e;
+        }
+
+        // Normalize hallway-hallucinated keys
+        if (tripData!.itineraries && !tripData!.days) {
+          console.log("Mapping hallucinated 'itineraries' key to 'days'");
+          tripData!.days = tripData!.itineraries;
+          delete (tripData as Record<string, unknown>).itineraries;
+        }
+
+        return NextResponse.json(tripData, { status: 200 });
+      } catch (parseError) {
+        console.error("JSON Parse Error in Generation. Content received:", content);
+        return NextResponse.json({ 
+          error: "Failed to parse generated itinerary as JSON.",
+          details: content.length > 200 ? content.substring(0, 200) + "..." : content
+        }, { status: 500 });
+      }
     } else {
-      throw new Error("Empty response from OpenAI");
+      throw new Error(`Empty response from OpenAI during generation (Content is null/empty). Finish reason: ${finishReason}`);
     }
 
   } catch (error) {
