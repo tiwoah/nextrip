@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
-import { Button } from "@/components/core/Button";
-import { Sparkles, ArrowRight, Loader2 } from "lucide-react";
+import { Sparkles, Loader2 } from "lucide-react";
 import { useTripStore } from "@/store/tripStore";
 
 import { ChatInterface } from "@/components/chat/ChatInterface";
@@ -12,6 +11,9 @@ import { ChatInterface } from "@/components/chat/ChatInterface";
 export default function Home() {
   const router = useRouter();
   const { setTrip, setPrompt, isLoading, setIsLoading } = useTripStore();
+  const [hasStartedChat, setHasStartedChat] = useState(false);
+  const [initialPrompt, setInitialPrompt] = useState("");
+  const [landingInput, setLandingInput] = useState("");
 
   const handleGenerate = async (finalPrompt: string) => {
     setIsLoading(true);
@@ -21,12 +23,12 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: finalPrompt }),
       });
-      
+
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || "Failed to generate");
       }
-      
+
       const tripData = await res.json();
       setTrip(tripData);
       setPrompt(finalPrompt);
@@ -48,43 +50,70 @@ export default function Home() {
 - Travel preferences: ${collectedData.preferences}
 - Dietary restrictions: ${collectedData.dietary}
 - Dates/Duration: ${collectedData.dates}`;
-    
+
     handleGenerate(finalPrompt);
   };
 
+  const handleFirstPrompt = () => {
+    const trimmed = landingInput.trim();
+    if (!trimmed) return;
+    setInitialPrompt(trimmed);
+    setLandingInput("");
+    setHasStartedChat(true);
+  };
+
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans">
+    <div className={`bg-background flex flex-col font-sans ${hasStartedChat ? "h-screen overflow-hidden" : "min-h-screen"}`}>
       <Header />
-      
-      <main className="flex-1 flex flex-col items-center justify-center px-4 max-w-4xl mx-auto w-full text-center py-10">
-        
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-card border border-surface-hover text-sm font-medium text-text-secondary mb-6">
-          <Sparkles size={14} className="text-event-pilot-blue" />
-          <span>Event Pilot AI v1.0</span>
-        </div>
 
-        <h1 className="text-4xl md:text-6xl font-semibold tracking-tight text-foreground mb-4 leading-tight">
-          Your Intelligent Travel Planner
-        </h1>
-        
-        <p className="text-lg text-text-secondary mb-8 max-w-2xl leading-relaxed">
-          Tell us about your next adventure, and we'll handle the rest.
-        </p>
+      {!hasStartedChat ? (
+        /* Landing: hero + input bar */
+        <main className="flex-1 flex flex-col items-center justify-center px-6 md:px-12 lg:px-24 pt-24 pb-32">
+          <div className="w-full max-w-3xl text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-card border border-surface-hover text-sm font-medium text-text-secondary mb-8">
+              <Sparkles size={14} className="text-event-pilot-blue" />
+              <span>Event Pilot AI</span>
+            </div>
 
-        {/* Chat Interface */}
-        <div className="w-full max-w-2xl mb-12">
-          <ChatInterface onComplete={handleChatComplete} />
-        </div>
+            <h1 className="text-3xl md:text-5xl font-semibold tracking-tight text-foreground mb-3 leading-tight">
+              Your Intelligent Travel Planner
+            </h1>
+            <p className="text-base text-text-secondary mb-12 max-w-xl mx-auto">
+              Describe your trip and we’ll build your itinerary.
+            </p>
 
-        {isLoading && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-white gap-4">
-            <Loader2 size={48} className="animate-spin text-event-pilot-blue" />
-            <h2 className="text-2xl font-semibold">Crafting your perfect itinerary...</h2>
-            <p className="opacity-80">This might take a minute</p>
+            <div className="w-full max-w-2xl mx-auto">
+              <div className="relative flex items-center bg-surface-card border border-surface-hover rounded-xl px-4 py-3 hover:border-event-pilot-blue/40 transition-colors">
+                <input
+                  type="text"
+                  value={landingInput}
+                  onChange={(e) => setLandingInput(e.target.value)}
+                  placeholder="e.g. 4-day foodie trip to Montreal, $2,000 budget, March 15th"
+                  className="flex-1 bg-transparent text-foreground text-sm placeholder:text-text-tertiary focus:outline-none"
+                  onKeyDown={(e) => e.key === "Enter" && handleFirstPrompt()}
+                />
+                <span className="text-xs text-text-tertiary ml-2 flex-shrink-0">Enter to generate</span>
+              </div>
+            </div>
           </div>
-        )}
+        </main>
+      ) : (
+        /* Full chat environment - fixed height so input stays anchored */
+        <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <ChatInterface
+            initialPrompt={initialPrompt}
+            onComplete={handleChatComplete}
+            fullMode
+          />
+        </main>
+      )}
 
-      </main>
+      {isLoading && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex flex-col items-center justify-center text-foreground gap-4">
+          <Loader2 size={40} className="animate-spin text-event-pilot-blue" />
+          <p className="text-sm text-text-secondary">Crafting your itinerary...</p>
+        </div>
+      )}
     </div>
   );
 }

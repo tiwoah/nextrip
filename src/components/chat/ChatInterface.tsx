@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, User, Bot, CheckCircle2 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Send, Loader2 } from "lucide-react";
 
 interface Message {
   role: "user" | "assistant";
@@ -11,23 +10,65 @@ interface Message {
 
 interface ChatInterfaceProps {
   onComplete: (collectedData: any) => void;
+  initialPrompt?: string;
+  fullMode?: boolean;
 }
 
-export function ChatInterface({ onComplete }: ChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hi there! I'm your Event-Pilot assistant. I'd love to help you plan an amazing trip. Where are you thinking of going, and who's coming along?" }
-  ]);
+export function ChatInterface({ onComplete, initialPrompt, fullMode }: ChatInterfaceProps) {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  
+  const hasFetchedInitialRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    const scrollToBottom = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    scrollToBottom();
+    requestAnimationFrame(scrollToBottom);
+  }, [messages, isLoading]);
+
+  const fetchResponse = async (messagesToSend: Message[]) => {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: messagesToSend }),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to send message");
     }
-  }, [messages]);
+    return res.json();
+  };
+
+  useEffect(() => {
+    if (!initialPrompt || hasFetchedInitialRef.current) return;
+    hasFetchedInitialRef.current = true;
+    const userMsg: Message = { role: "user", content: initialPrompt };
+    setMessages([userMsg]);
+    setIsLoading(true);
+
+    fetchResponse([userMsg])
+      .then((data) => {
+        setMessages((prev) => [...prev, { role: "assistant", content: data.message }]);
+        if (data.isComplete) {
+          setIsComplete(true);
+          setTimeout(() => onComplete(data.collectedData), 1500);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Something went wrong."}` },
+        ]);
+      })
+      .finally(() => setIsLoading(false));
+  }, [initialPrompt]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading || isComplete) return;
@@ -39,125 +80,87 @@ export function ChatInterface({ onComplete }: ChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to send message");
-      }
-
-      const data = await res.json();
-      
+      const data = await fetchResponse(newMessages);
       const assistantMessage: Message = { role: "assistant", content: data.message };
-      setMessages([...newMessages, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
 
       if (data.isComplete) {
         setIsComplete(true);
-        setTimeout(() => {
-          onComplete(data.collectedData);
-        }, 2000);
+        setTimeout(() => onComplete(data.collectedData), 1500);
       }
     } catch (error) {
       console.error(error);
-      const errorMessage = error instanceof Error ? error.message : "I'm sorry, I encountered an error. Could you try saying that again?";
-      setMessages([...newMessages, { role: "assistant", content: `Error: ${errorMessage}` }]);
+      const errorMessage = error instanceof Error ? error.message : "Could you try again?";
+      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${errorMessage}` }]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const containerClass = fullMode
+    ? "flex flex-col flex-1 min-h-0 w-full max-w-3xl mx-auto"
+    : "w-full max-w-2xl mx-auto";
+  const messagesClass = fullMode
+    ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-4 no-scrollbar"
+    : "min-h-[280px] max-h-[400px] overflow-y-auto p-4 space-y-3 no-scrollbar";
+
   return (
-    <div className="flex flex-col h-[500px] w-full max-w-2xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden border border-surface-hover">
-      {/* Chat Header */}
-      <div className="px-6 py-4 bg-event-pilot-blue text-white flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="bg-white/20 p-2 rounded-full">
-            <Bot size={20} />
-          </div>
-          <div>
-            <h3 className="font-semibold">Event-Pilot Concierge</h3>
-            <p className="text-xs text-white/80">Online • Happy to help</p>
-          </div>
-        </div>
-        {isComplete && (
-          <motion.div 
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="flex items-center gap-2 bg-green-500/20 px-3 py-1 rounded-full text-xs font-medium"
-          >
-            <CheckCircle2 size={14} /> Ready to Generate
-          </motion.div>
+    <div className={containerClass}>
+      <div ref={scrollRef} className={messagesClass}>
+        {messages.length === 0 && !initialPrompt && (
+          <p className="text-text-tertiary text-sm">Start a conversation...</p>
         )}
-      </div>
-
-      {/* Messages Area */}
-      <div 
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50 no-scrollbar"
-      >
-        <AnimatePresence initial={false}>
-          {messages.map((m, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.2 }}
-              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            className={`flex w-full ${m.role === "user" ? "justify-end" : "justify-start"}`}
+          >
+            <div
+              className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                m.role === "user"
+                  ? "bg-event-pilot-blue text-white rounded-br-md"
+                  : "bg-surface-hover text-foreground rounded-bl-md"
+              }`}
             >
-              <div className={`flex gap-3 max-w-[80%] ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                  m.role === "user" ? "bg-event-pilot-blue text-white" : "bg-white text-event-pilot-blue shadow-sm border border-surface-hover"
-                }`}>
-                  {m.role === "user" ? <User size={16} /> : <Bot size={16} />}
-                </div>
-                <div className={`px-4 py-2 rounded-2xl text-sm leading-relaxed ${
-                  m.role === "user" 
-                    ? "bg-event-pilot-blue text-white rounded-tr-none" 
-                    : "bg-white text-text-primary shadow-sm border border-surface-hover rounded-tl-none"
-                }`}>
-                  {m.content}
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        {isLoading && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex justify-start"
-          >
-            <div className="bg-white text-event-pilot-blue p-2 rounded-full shadow-sm border border-surface-hover">
-              <Loader2 size={16} className="animate-spin" />
+              {m.content}
             </div>
-          </motion.div>
+          </div>
+        ))}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="px-4 py-2.5 rounded-2xl rounded-bl-md bg-surface-hover">
+              <Loader2 size={18} className="animate-spin text-text-tertiary" />
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 bg-white border-t border-surface-hover">
-        <div className="relative flex items-center">
+      <div className="flex-shrink-0 p-4 md:px-8 pb-6 bg-background border-t border-surface-hover">
+        <div
+          className={`flex items-center gap-2 bg-surface-card border border-surface-hover rounded-xl px-4 py-2.5 ${
+            fullMode ? "max-w-3xl mx-auto" : ""
+          }`}
+        >
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder={isComplete ? "Planning your itinerary..." : "Type your message..."}
+            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+            placeholder={isComplete ? "Planning your itinerary..." : "Message..."}
             disabled={isLoading || isComplete}
-            className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-surface-hover rounded-xl focus:outline-none focus:border-event-pilot-blue focus:ring-1 focus:ring-event-pilot-blue disabled:opacity-50 transition-all text-sm"
+            className="flex-1 bg-transparent text-foreground text-sm placeholder:text-text-tertiary focus:outline-none py-1"
           />
           <button
             onClick={handleSend}
             disabled={isLoading || !input.trim() || isComplete}
-            className="absolute right-2 p-2 bg-event-pilot-blue text-white rounded-lg hover:bg-event-pilot-blue/90 disabled:opacity-50 disabled:hover:bg-event-pilot-blue transition-colors"
+            className="p-1.5 text-event-pilot-blue hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
           >
             <Send size={18} />
           </button>
         </div>
+        {fullMode && (
+          <p className="text-xs text-text-tertiary text-center mt-2">Enter to send</p>
+        )}
       </div>
     </div>
   );

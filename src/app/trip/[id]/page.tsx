@@ -199,7 +199,7 @@ export default function TripDashboard() {
                   handleUpdatePlan();
                 }
               }}
-              className="w-[1018px] rounded-xl border border-surface-hover bg-surface-card px-3 py-2 text-sm text-foreground focus:border-event-pilot-blue focus:outline-none"
+              className="w-[600px] rounded-xl border border-surface-hover bg-surface-card px-3 py-2 text-sm text-foreground focus:border-event-pilot-blue focus:outline-none"
               placeholder="Update prompt (e.g. budget $1,200)"
             />
             <button
