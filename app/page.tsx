@@ -1,4 +1,8 @@
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 
 export default function Home() {
   return (
@@ -34,6 +38,30 @@ export default function Home() {
             center.
           </p>
         </div>
+
+        <section className="flex w-full max-w-sm flex-col gap-6 rounded-lg border border-border p-6">
+          <h2 className="text-lg font-medium text-foreground">
+            UI Components
+          </h2>
+          <div className="space-y-2">
+            <Label htmlFor="placeholder-input">Input field</Label>
+            <Input
+              id="placeholder-input"
+              placeholder="Enter something…"
+              className="w-full"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Slider</Label>
+            <Slider defaultValue={[50]} max={100} className="w-full" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button>Button</Button>
+            <Button variant="outline">Outline</Button>
+            <Button variant="secondary">Secondary</Button>
+          </div>
+        </section>
+
         <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
           <a
             className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
