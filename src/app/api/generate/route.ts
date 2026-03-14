@@ -5,14 +5,47 @@ const ticketmasterKey = process.env.TICKETMASTER_API_KEY;
 const aviationstackKey = process.env.AVIATION_API;
 
 // Types for API responses
+interface TicketmasterPriceRange {
+  type?: string;
+  currency?: string;
+  min?: number;
+  max?: number;
+}
+
+interface TicketmasterVenue {
+  name?: string;
+  city?: { name?: string };
+  address?: { line1?: string };
+  location?: { longitude?: string; latitude?: string };
+}
+
 interface TicketmasterEvent {
+  id?: string;
   name: string;
-  url: string;
+  url?: string;
+  info?: string;
   dates?: {
     start?: {
       localDate?: string;
+      localTime?: string;
     };
   };
+  priceRanges?: TicketmasterPriceRange[];
+  _embedded?: {
+    venues?: TicketmasterVenue[];
+  };
+}
+
+/** Normalized event data from Ticketmaster for use in itinerary */
+interface TicketmasterEventData {
+  id: string;
+  name: string;
+  url: string;
+  price: number | null;  // from API, or null if not available
+  priceRange: { min: number; max: number } | null;
+  date: string | null;
+  venueName: string | null;
+  venueCity: string | null;
 }
 
 interface AviationStackFlight {
@@ -23,12 +56,36 @@ interface AviationStackFlight {
 }
 
 // API helper functions
-async function fetchTicketmasterEvents(city: string) {
+async function fetchTicketmasterEvents(city: string): Promise<TicketmasterEventData[]> {
   if (!ticketmasterKey) return [];
   try {
-    const response = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?city=${city}&apikey=${ticketmasterKey}&size=5`);
+    const response = await fetch(
+      `https://app.ticketmaster.com/discovery/v2/events.json?city=${encodeURIComponent(city)}&apikey=${ticketmasterKey}&size=10`
+    );
     const data = await response.json();
-    return data._embedded?.events || [];
+    const events: TicketmasterEvent[] = data._embedded?.events || [];
+
+    return events.map((e: TicketmasterEvent) => {
+      const venue = e._embedded?.venues?.[0];
+      const priceRange = e.priceRanges?.[0];
+      const price = priceRange
+        ? Math.round((priceRange.min ?? priceRange.max ?? 0))
+        : null;
+      const priceRangeObj = priceRange && priceRange.min != null && priceRange.max != null
+        ? { min: priceRange.min, max: priceRange.max }
+        : null;
+
+      return {
+        id: e.id || '',
+        name: e.name,
+        url: e.url || '',
+        price,
+        priceRange: priceRangeObj,
+        date: e.dates?.start?.localDate ?? null,
+        venueName: venue?.name ?? null,
+        venueCity: venue?.city?.name ?? null,
+      };
+    }).filter((e: TicketmasterEventData) => e.url && e.name);
   } catch (error) {
     console.error('Ticketmaster API error:', error);
     return [];
@@ -126,6 +183,65 @@ const responseSchema = {
   }
 };
 
+/** Invalid URL patterns (hallucinated/placeholder links) */
+const INVALID_URL_PATTERNS = /example\.(com|org|net)|placeholder|localhost|\.\.\.|fake|dummy|test\./i;
+
+function normalizeForMatch(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+}
+
+function findMatchingEvent(segmentTitle: string, segmentType: string, events: TicketmasterEventData[]): TicketmasterEventData | null {
+  if (segmentType !== 'attraction') return null;
+  const normTitle = normalizeForMatch(segmentTitle);
+  if (!normTitle) return null;
+
+  for (const event of events) {
+    const normEvent = normalizeForMatch(event.name);
+    if (normEvent && (normTitle.includes(normEvent) || normEvent.includes(normTitle))) {
+      return event;
+    }
+  }
+  // Fallback: check if any event name is contained in the segment title (e.g. "Concert – Artist Name" vs "Artist Name")
+  for (const event of events) {
+    if (segmentTitle.toLowerCase().includes(event.name.toLowerCase())) {
+      return event;
+    }
+  }
+  return null;
+}
+
+function injectTicketmasterData(tripData: Record<string, unknown>, events: TicketmasterEventData[]): Record<string, unknown> {
+  const days = tripData.days as Array<{ segments?: Array<Record<string, unknown>> }> | undefined;
+  if (!Array.isArray(days)) return tripData;
+
+  for (const day of days) {
+    const segments = day.segments;
+    if (!Array.isArray(segments)) continue;
+
+    for (const seg of segments) {
+      const title = String(seg.title || '');
+      const type = String(seg.type || '');
+      const existingUrl = seg.bookingUrl;
+
+      // Overwrite with API data if we find a matching event
+      const matched = findMatchingEvent(title, type, events);
+      if (matched) {
+        seg.bookingUrl = matched.url;
+        if (matched.price != null) {
+          seg.cost = matched.price;
+        }
+        continue;
+      }
+
+      // Null out invalid/hallucinated URLs
+      if (typeof existingUrl === 'string' && INVALID_URL_PATTERNS.test(existingUrl)) {
+        seg.bookingUrl = null;
+      }
+    }
+  }
+  return tripData;
+}
+
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -148,14 +264,23 @@ export async function POST(req: Request) {
 
     console.log("Generating trip for prompt:", prompt);
 
-    const cityMatch = prompt.match(/\b(?:in|to|at)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i);
-    const city = cityMatch ? cityMatch[1] : 'New York';
+    const cityMatch = prompt.match(/(?:Location|location):\s*([^\n-]+?)(?:\s*-|\n|$)/i)
+      || prompt.match(/\b(?:in|to|at)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i);
+    const city = (cityMatch ? cityMatch[1].trim() : 'New York').replace(/\s+/g, ' ');
 
     const events = await fetchTicketmasterEvents(city);
     const flights = await fetchFlights('JFK', 'LAX');
 
     const apiData = {
-      events: events.map((e: TicketmasterEvent) => ({ name: e.name, url: e.url, date: e.dates?.start?.localDate })),
+      events: events.map((e) => ({
+        name: e.name,
+        url: e.url,
+        date: e.date,
+        price: e.price,
+        priceRange: e.priceRange,
+        venueName: e.venueName,
+        venueCity: e.venueCity,
+      })),
       flights: flights.map((f: AviationStackFlight) => ({ flight: f.flight?.iata, status: f.flight_status }))
     };
 
@@ -202,6 +327,13 @@ EXAMPLE STRUCTURE:
 
 API Data: ${JSON.stringify(apiData)}
 
+EVENTS FROM TICKETMASTER API (use these for attraction segments):
+The "events" array contains REAL events with valid booking URLs and prices. When creating attraction/event segments:
+- Match segment title to an event "name" from the API.
+- Use the event "url" as bookingUrl – this is a real Ticketmaster/LiveNation link.
+- Use the event "price" (or priceRange.min) as cost – this is real API data, NOT an estimate.
+- NEVER invent or hallucinate URLs (e.g. example.com, placeholder links). Use null for bookingUrl if no API event matches.
+
 STRICT SCHEMA TO FOLLOW:
 ${JSON.stringify(responseSchema.schema, null, 2)}`;
 
@@ -240,25 +372,28 @@ ${JSON.stringify(responseSchema.schema, null, 2)}`;
         } catch (e) {
           // Truncation recovery: progressively strip from end to find valid JSON
           let temp = jsonToParse.trim();
-          let success = false;
+          let parsed: Record<string, unknown> | null = null;
           while (temp.length > 2) {
             try {
-              tripData = JSON.parse(temp);
-              success = true;
+              parsed = JSON.parse(temp);
               break;
             } catch {
               temp = temp.slice(0, -1).trim();
             }
           }
-          if (!success) throw e;
+          if (!parsed) throw e;
+          tripData = parsed;
         }
 
         // Normalize hallway-hallucinated keys
-        if (tripData!.itineraries && !tripData!.days) {
+        if (tripData.itineraries && !tripData.days) {
           console.log("Mapping hallucinated 'itineraries' key to 'days'");
-          tripData!.days = tripData!.itineraries;
+          tripData.days = tripData.itineraries;
           delete (tripData as Record<string, unknown>).itineraries;
         }
+
+        // Post-process: overwrite attraction segments with real Ticketmaster API data
+        tripData = injectTicketmasterData(tripData as Record<string, unknown>, events);
 
         return NextResponse.json(tripData, { status: 200 });
       } catch (parseError) {
