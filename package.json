@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@google/genai": "^1.45.0",
     "@types/leaflet": "^1.9.21",
     "class-variance-authority": "^0.7.1",
     "date-fns": "^4.1.0",
@@ -17,6 +16,7 @@
     "leaflet-defaulticon-compatibility": "^0.1.2",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
+    "openai": "^6.29.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",

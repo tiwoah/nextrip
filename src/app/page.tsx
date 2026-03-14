@@ -46,7 +46,7 @@ export default function Home() {
       router.push(`/trip/${tripData.trip_id}`);
     } catch (error) {
       console.error(error);
-      alert("Error generating trip. Please make sure GEMINI_API_KEY is configured.");
+      alert(error instanceof Error ? error.message : "An unknown error occurred during generation");
     } finally {
       setIsLoading(false);
     }

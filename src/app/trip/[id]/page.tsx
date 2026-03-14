@@ -32,7 +32,7 @@ export default function TripDashboard() {
   useEffect(() => {
     if (!currentTrip) return;
 
-    if (!activeDayId && currentTrip.days.length > 0) {
+    if (!activeDayId && currentTrip.days?.length > 0) {
       setActiveDayId(currentTrip.days[0].id);
     }
   }, [currentTrip, activeDayId]);
