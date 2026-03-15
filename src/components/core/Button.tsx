@@ -6,13 +6,13 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 export const Button = ({ variant = 'primary', children, className = '', ...props }: ButtonProps) => {
-  const baseStyles = "inline-flex items-center justify-center font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-event-pilot-blue focus:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none";
+  const baseStyles = "inline-flex items-center justify-center font-bold uppercase tracking-widest transition-all focus:outline-none disabled:opacity-50 disabled:pointer-events-none active:scale-95";
   
   const variants = {
-    primary: "bg-event-pilot-blue text-white hover:bg-event-pilot-blue/90 rounded-sm px-4 py-3 text-sm",
-    secondary: "bg-white text-text-secondary border border-gray-200 hover:bg-surface-hover rounded-sm px-4 py-3 text-sm",
-    tertiary: "text-text-secondary hover:text-foreground bg-transparent underline-offset-4 hover:underline",
-    icon: "h-10 w-10 rounded-full hover:bg-surface-hover text-foreground flex items-center justify-center"
+    primary: "bg-foreground text-background hover:opacity-90 rounded-2xl px-6 py-3.5 text-xs shadow-lg",
+    secondary: "bg-surface-card text-foreground border border-surface-hover hover:bg-white rounded-2xl px-6 py-3.5 text-xs",
+    tertiary: "text-foreground/70 hover:text-foreground bg-transparent underline-offset-4 hover:underline text-xs",
+    icon: "h-11 w-11 rounded-full hover:bg-surface-hover text-foreground flex items-center justify-center border border-surface-hover transition-colors"
   };
 
   return (

@@ -78,3 +78,24 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+@layer utilities {
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(var(--base-rotate, 0deg)); }
+    50% { transform: translateY(-20px) rotate(calc(var(--base-rotate, 0deg) + 2deg)); }
+  }
+
+  .animate-float-slow {
+    --base-rotate: 6deg;
+    animation: float 8s ease-in-out infinite;
+  }
+
+  .animate-float-medium {
+    --base-rotate: -3deg;
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-float-fast {
+    --base-rotate: 2deg;
+    animation: float 5s ease-in-out infinite;
+  }
+}

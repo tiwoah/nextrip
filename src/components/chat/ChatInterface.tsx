@@ -64,7 +64,7 @@ export function ChatInterface({ onComplete, initialPrompt, fullMode }: ChatInter
         console.error(err);
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Something went wrong."}` },
+          { role: "assistant", content: `I encountered a small hiccup. Could you try that again?` },
         ]);
       })
       .finally(() => setIsLoading(false));
@@ -90,77 +90,91 @@ export function ChatInterface({ onComplete, initialPrompt, fullMode }: ChatInter
       }
     } catch (error) {
       console.error(error);
-      const errorMessage = error instanceof Error ? error.message : "Could you try again?";
-      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${errorMessage}` }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: "I'm having trouble connecting. Let's try once more." }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const containerClass = fullMode
-    ? "flex flex-col flex-1 min-h-0 w-full max-w-3xl mx-auto"
-    : "w-full max-w-2xl mx-auto";
-  const messagesClass = fullMode
-    ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6 md:p-8 space-y-4 no-scrollbar"
-    : "min-h-[280px] max-h-[400px] overflow-y-auto p-4 space-y-3 no-scrollbar";
+  const containerClass = "relative flex flex-col flex-1 min-h-0 w-full overflow-hidden";
+  const contentClass = "flex-1 flex flex-col min-h-0 w-full max-w-2xl mx-auto px-6 z-10";
+  const messagesClass = "flex-1 min-h-0 overflow-y-auto pt-24 pb-12 space-y-6 no-scrollbar";
 
   return (
     <div className={containerClass}>
-      <div ref={scrollRef} className={messagesClass}>
-        {messages.length === 0 && !initialPrompt && (
-          <p className="text-text-tertiary text-sm">Start a conversation...</p>
-        )}
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`flex w-full ${m.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            <div
-              className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                m.role === "user"
-                  ? "bg-event-pilot-blue text-white rounded-br-md"
-                  : "bg-surface-hover text-foreground rounded-bl-md"
-              }`}
-            >
-              {m.content}
-            </div>
-          </div>
-        ))}
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="px-4 py-2.5 rounded-2xl rounded-bl-md bg-surface-hover">
-              <Loader2 size={18} className="animate-spin text-text-tertiary" />
-            </div>
-          </div>
-        )}
+      {/* Side-edge Bento Decorations */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden hidden md:block">
+        <div className="absolute top-[15%] -left-[100px] w-[240px] h-[320px] rounded-[40px] overflow-hidden border border-surface-hover shadow-xl -rotate-6 animate-float-medium opacity-40 hover:opacity-100 transition-opacity">
+          <img src="/bento-1.png" alt="" className="w-full h-full object-cover" />
+        </div>
+        <div className="absolute bottom-[20%] -right-[120px] w-[280px] h-[380px] rounded-[40px] overflow-hidden border border-surface-hover shadow-xl rotate-3 animate-float-slow opacity-40 hover:opacity-100 transition-opacity">
+          <img src="/bento-2.png" alt="" className="w-full h-full object-cover" />
+        </div>
       </div>
 
-      <div className="flex-shrink-0 p-4 md:px-8 pb-6 bg-background border-t border-surface-hover">
-        <div
-          className={`flex items-center gap-2 bg-surface-card border border-surface-hover rounded-xl px-4 py-2.5 ${
-            fullMode ? "max-w-3xl mx-auto" : ""
-          }`}
-        >
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder={isComplete ? "Planning your itinerary..." : "Message..."}
-            disabled={isLoading || isComplete}
-            className="flex-1 bg-transparent text-foreground text-sm placeholder:text-text-tertiary focus:outline-none py-1"
-          />
-          <button
-            onClick={handleSend}
-            disabled={isLoading || !input.trim() || isComplete}
-            className="p-1.5 text-event-pilot-blue hover:bg-surface-hover rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-          >
-            <Send size={18} />
-          </button>
+      <div className={contentClass}>
+        <div ref={scrollRef} className={messagesClass}>
+          {messages.length === 0 && !initialPrompt && (
+            <div className="h-full flex items-center justify-center opacity-10">
+              <p className="text-xl font-bold tracking-[0.3em] uppercase">Planning Mode</p>
+            </div>
+          )}
+          
+          {messages.map((m, i) => (
+            <div
+              key={i}
+              className={`flex w-full animate-in fade-in slide-in-from-bottom-2 duration-400 ${m.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              <div
+                className={`max-w-[85%] px-6 py-4 rounded-[24px] text-base font-medium leading-normal shadow-sm border ${
+                  m.role === "user"
+                    ? "bg-foreground text-background border-foreground rounded-br-md"
+                    : "bg-surface-card text-foreground border-surface-hover rounded-bl-md"
+                }`}
+              >
+                {m.content}
+              </div>
+            </div>
+          ))}
+
+          {isLoading && (
+            <div className="flex justify-start animate-in fade-in duration-300">
+              <div className="px-6 py-4 rounded-[24px] rounded-bl-md bg-surface-card border border-surface-hover flex items-center gap-1.5">
+                <span className="w-1 h-1 bg-foreground/20 rounded-full animate-bounce"></span>
+                <span className="w-1 h-1 bg-foreground/20 rounded-full animate-bounce delay-100"></span>
+                <span className="w-1 h-1 bg-foreground/20 rounded-full animate-bounce delay-200"></span>
+              </div>
+            </div>
+          )}
         </div>
-        {fullMode && (
-          <p className="text-xs text-text-tertiary text-center mt-2">Enter to send</p>
-        )}
+
+        <div className="flex-shrink-0 pt-4 pb-12">
+          <div className="relative group">
+              <div className={`flex items-center gap-4 bg-white/80 backdrop-blur-2xl border border-surface-hover rounded-[24px] px-6 py-4 transition-all shadow-sm focus-within:shadow-md focus-within:scale-[1.005] ${isComplete ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+                      placeholder={isComplete ? "Success!" : "Your message..."}
+                      disabled={isLoading || isComplete}
+                      className="flex-1 bg-transparent text-foreground text-base font-medium placeholder:text-foreground/20 focus:outline-none"
+                  />
+                  <button
+                      onClick={handleSend}
+                      disabled={isLoading || !input.trim() || isComplete}
+                      className="p-2.5 bg-foreground text-background rounded-xl hover:opacity-90 active:scale-90 transition-all disabled:opacity-10"
+                  >
+                      <Send size={18} />
+                  </button>
+              </div>
+              {!isComplete && (
+                  <p className="text-center mt-6 text-[9px] font-bold uppercase tracking-[0.3em] text-foreground/10">
+                      Press Enter to Send
+                  </p>
+              )}
+          </div>
+        </div>
       </div>
     </div>
   );

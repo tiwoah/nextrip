@@ -86,8 +86,8 @@ export default function TripDashboard() {
       <div className="h-screen bg-background flex flex-col font-sans overflow-hidden">
         <Header />
         <div className="flex-1 flex text-text-secondary items-center justify-center flex-col gap-4">
-           <Loader2 className="animate-spin text-event-pilot-blue w-8 h-8"/>
-           Loading your personalized trip...
+           <Loader2 className="animate-spin text-foreground w-8 h-8"/>
+           <p className="font-bold uppercase tracking-[0.3em] text-xs">Crafting your itinerary...</p>
         </div>
       </div>
     );
@@ -176,44 +176,50 @@ export default function TripDashboard() {
     <div className="h-screen bg-background flex flex-col font-sans overflow-hidden">
       <Header />
       
-      {/* Secondary Contextual Navigation */}
-      <div className="border-b border-surface-hover bg-white px-6 py-4 flex items-center justify-between z-10 flex-shrink-0">
-        <div className="flex flex-col gap-1">
-          <button onClick={() => router.push('/')} className="text-sm text-text-tertiary hover:text-foreground flex items-center gap-1 transition-colors w-fit">
-            <ChevronLeft size={16} /> Back to Planner
+      {/* Secondary Contextual Navigation: Refined & Minimal */}
+      <div className="mt-16 border-b border-surface-hover bg-white/80 backdrop-blur-md px-6 py-5 flex flex-col md:flex-row md:items-center justify-between z-10 flex-shrink-0 gap-4">
+        <div className="flex flex-col gap-1.5">
+          <button onClick={() => router.push('/')} className="text-xs font-bold uppercase tracking-[0.2em] text-foreground/40 hover:text-foreground flex items-center gap-1 transition-colors w-fit mb-1">
+            <ChevronLeft size={14} /> Back to Planner
           </button>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-3">
-            {currentTrip.title}
-          </h1>
-          <p className="text-sm font-medium text-text-secondary flex items-center gap-2">
-            <MapPin size={14} /> {currentTrip.overview.total_days} Days • {currentTrip.dates}
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tighter text-foreground leading-none">
+                {currentTrip.title}
+            </h1>
+            <div className="px-3 py-1 rounded-full bg-foreground/5 border border-foreground/5 text-[10px] font-bold uppercase tracking-widest text-foreground/50">
+                {currentTrip.overview.total_days} Days
+            </div>
+          </div>
+          <p className="text-xs font-bold uppercase tracking-widest text-foreground/40 flex items-center gap-2 mt-1">
+            <MapPin size={12} strokeWidth={2.5}/> {currentTrip.dates}
           </p>
         </div>
-        <div className="flex items-center gap-2 mt-4 sm:mt-0">
-          <div className="flex gap-2">
-            <input
-              value={updatePrompt}
-              onChange={(e) => setUpdatePrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !isLoading && updatePrompt.trim()) {
-                  handleUpdatePlan();
-                }
-              }}
-              className="w-[600px] rounded-xl border border-surface-hover bg-surface-card px-3 py-2 text-sm text-foreground focus:border-event-pilot-blue focus:outline-none"
-              placeholder="Update prompt (e.g. budget $1,200)"
-            />
-            <button
-              onClick={handleUpdatePlan}
-              disabled={isLoading || !updatePrompt.trim()}
-              className="rounded-xl bg-event-pilot-blue px-3 py-2 text-sm font-semibold text-white disabled:bg-surface-hover"
-            >
-              {isLoading ? 'Updating…' : 'Update'}
-            </button>
-          </div>
+
+        <div className="flex items-center gap-3">
+            <div className="relative flex items-center bg-surface-card border border-surface-hover rounded-2xl p-1.5 group transition-all focus-within:ring-2 focus-within:ring-foreground/5">
+                <input
+                value={updatePrompt}
+                onChange={(e) => setUpdatePrompt(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isLoading && updatePrompt.trim()) {
+                    handleUpdatePlan();
+                    }
+                }}
+                className="w-full md:w-[320px] lg:w-[480px] bg-transparent px-4 py-2 text-sm font-medium text-foreground placeholder:text-foreground/30 focus:outline-none"
+                placeholder="Modify your plan..."
+                />
+                <Button
+                onClick={handleUpdatePlan}
+                disabled={isLoading || !updatePrompt.trim()}
+                className="rounded-xl px-5 py-2 !text-[10px]"
+                >
+                {isLoading ? 'Updating' : 'Update'}
+                </Button>
+            </div>
         </div>
       </div>
 
-      <div className="px-6 py-3 border-b border-surface-hover bg-surface-card flex-shrink-0">
+      <div className="px-6 py-2.5 border-b border-surface-hover bg-surface-card flex-shrink-0">
          <DaySelector 
             days={currentTrip.days} 
             activeId={activeDay.id} 
@@ -225,8 +231,8 @@ export default function TripDashboard() {
       <main className="flex-1 flex overflow-hidden">
         
         {/* Left Panel: Budget + Timeline */}
-        <div className="w-full lg:w-[600px] flex-shrink-0 flex flex-col border-r border-surface-hover bg-background">
-          <div className="sticky top-0 z-20 bg-background border-b border-surface-hover px-6 py-4">
+        <div className="w-full lg:w-[580px] flex-shrink-0 flex flex-col border-r border-surface-hover bg-background">
+          <div className="bg-background border-b border-surface-hover px-6 py-5">
             <BudgetProgress 
               compact
               totalBudget={currentTrip.overview.total_budget}
@@ -235,15 +241,12 @@ export default function TripDashboard() {
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto no-scrollbar">
+          <div className="flex-1 overflow-y-auto no-scrollbar bg-surface-card/30">
             <div className="p-6">
-              {/* Timeline Header */}
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-foreground tracking-tight">{activeDay.dayLabel} Itinerary</h2>
-
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-foreground/30">{activeDay.dayLabel} Itinerary</h2>
               </div>
 
-              {/* Timeline Component */}
               <Timeline 
                 segments={activeDay.segments} 
                 activeSegmentId={activeSegmentId}
@@ -254,20 +257,20 @@ export default function TripDashboard() {
         </div>
 
         {/* Right Panel: Map Container */}
-        <div className="hidden lg:flex flex-1 relative bg-[#E5E9EC]">
+        <div className="hidden lg:flex flex-1 relative bg-[#F8F9FA]">
           <MapView segments={activeDay.segments} />
         </div>
 
       </main>
 
-      {/* Floating Save Button (always on top) */}
-      <div className="fixed bottom-5 right-5 z-[9999]">
+      {/* Floating Save Button */}
+      <div className="fixed bottom-6 right-6 z-[9999]">
         <Button
           onClick={handleSaveAndViewSaved}
           disabled={!currentTrip}
-          className="bg-event-pilot-blue text-white rounded-full px-4 py-2 shadow-lg hover:bg-event-pilot-blue/90"
+          className="shadow-2xl px-6 py-4"
         >
-          <Bookmark size={16} className="mr-2" /> Save Plan
+          <Bookmark size={14} className="mr-2" /> Save Trip
         </Button>
       </div>
     </div>

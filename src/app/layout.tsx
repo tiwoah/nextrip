@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Event Pilot AI - Intelligent Trip & Travel Planner",
+  title: "NexTrip - Intelligent Trip & Travel Planner",
   description: "A minimalist, intelligent travel planning interface driven by multi-agent AI.",
 };
 
