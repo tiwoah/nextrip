@@ -52,7 +52,6 @@ export const Timeline = ({ segments, activeSegmentId, onSegmentSelect, currency 
                   time={segment.time}
                   description={segment.description}
                   cost={segment.cost}
-                  confirmationCode={segment.confirmationCode}
                   isActive={isActive}
                   bookingUrl={segment.bookingUrl}
                   currency={currency || segment.currency}

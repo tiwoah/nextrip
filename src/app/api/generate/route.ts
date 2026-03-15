@@ -103,7 +103,6 @@ const responseSchema = {
                   location: { type: "string" },
                   description: { type: ["string", "null"] },
                   cost: { type: ["number", "null"] },
-                  confirmationCode: { type: ["string", "null"] },
                   travelModeToNext: { type: ["string", "null"], enum: ["walk", "drive", "transit", null] },
                   distanceToNext: { type: ["string", "null"] },
                   coordinates: {
@@ -113,7 +112,7 @@ const responseSchema = {
                   },
                   bookingUrl: { type: ["string", "null"] }
                 },
-                required: ["id", "time", "type", "title", "location", "description", "cost", "confirmationCode", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl"],
+                required: ["id", "time", "type", "title", "location", "description", "cost", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl"],
                 additionalProperties: false
               }
             }
@@ -171,7 +170,7 @@ CRITICAL JSON STRUCTURE:
 - Use "days" for the itinerary array.
 - "currency" at the top level is MANDATORY. **Default to "CAD"** unless a specific local currency is more appropriate for the destination (e.g. "VND" for Vietnam, "EUR" for France).
 - Each day MUST have "id", "dayLabel", "dateStr", "activitiesCount", and "segments".
-- Each segment MUST have "id", "time", "type", "title", "location", "description", "cost", "confirmationCode", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl". Segment-level "currency" is optional.
+- Each segment MUST have "id", "time", "type", "title", "location", "description", "cost", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl". Segment-level "currency" is optional.
 - Detect the appropriate currency based on the destination, but **default everything to CAD** ($CAD) if in doubt or if no specific currency is requested.
 
 EXAMPLE STRUCTURE:
@@ -196,7 +195,6 @@ EXAMPLE STRUCTURE:
         "location": "Paris",
         "description": "Visit the icon.",
         "cost": 25,
-        "confirmationCode": null,
         "travelModeToNext": "walk",
         "distanceToNext": "500m",
         "coordinates": [2.2945, 48.8584],

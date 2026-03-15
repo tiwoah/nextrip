@@ -6,7 +6,6 @@ export interface TripSegment {
   location: string;
   description?: string;
   cost?: number;
-  confirmationCode?: string;
   travelModeToNext?: "walk" | "drive" | "transit";
   distanceToNext?: string;
   coordinates?: [number, number]; // [longitude, latitude]

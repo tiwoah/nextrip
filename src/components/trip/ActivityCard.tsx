@@ -12,7 +12,6 @@ interface ActivityCardProps {
   location: string;
   description?: string;
   cost?: number;
-  confirmationCode?: string;
   distance?: string;
   isActive?: boolean;
   bookingUrl?: string;
@@ -35,7 +34,6 @@ export const ActivityCard = ({
   location,
   description,
   cost,
-  confirmationCode,
   distance,
   isActive,
   bookingUrl,
@@ -91,18 +89,11 @@ export const ActivityCard = ({
           )}
 
           {/* Meta Footer */}
-          {(confirmationCode || distance) && (
+          {distance && (
             <div className="flex items-center gap-4 text-xs text-text-secondary mt-3 pt-3 border-t border-gray-100">
-              {confirmationCode && (
-                <span className="flex items-center gap-1 text-success-green font-medium">
-                  Confirmed: #{confirmationCode}
-                </span>
-              )}
-              {distance && (
-                <span className="flex items-center gap-1">
-                  {distance} to next
-                </span>
-              )}
+              <span className="flex items-center gap-1">
+                {distance} to next
+              </span>
             </div>
           )}
         </div>
