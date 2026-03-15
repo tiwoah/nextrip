@@ -1,8 +1,10 @@
 import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
 
+import { findBookingLink } from '@/lib/google-search';
+
 const ticketmasterKey = process.env.TICKETMASTER_API_KEY;
-const aviationstackKey = process.env.AVIATION_API;
+const aviationstackKey = process.env.AVIATIONSTACK_API_KEY;
 
 // Types for API responses
 interface TicketmasterEvent {
@@ -234,7 +236,7 @@ ${JSON.stringify(responseSchema.schema, null, 2)}`;
           return `: ${val}${end}`;
         });
 
-        let tripData: Record<string, unknown>;
+        let tripData: Record<string, unknown> | null = null;
         try {
           tripData = JSON.parse(jsonToParse);
         } catch (e) {
@@ -258,6 +260,23 @@ ${JSON.stringify(responseSchema.schema, null, 2)}`;
           console.log("Mapping hallucinated 'itineraries' key to 'days'");
           tripData!.days = tripData!.itineraries;
           delete (tripData as Record<string, unknown>).itineraries;
+        }
+
+        if (!tripData) {
+          throw new Error("Failed to parse trip data.");
+        }
+
+        // Enhance booking links for attractions and accommodation if missing
+        if (process.env.GOOGLE_CLOUD_API_KEY && process.env.GOOGLE_SEARCH_ENGINE_ID) {
+          console.log("Enhancing booking links using Google Search...");
+          const days = (tripData!.days || []) as any[];
+          for (const day of days) {
+            for (const segment of day.segments) {
+              if (!segment.bookingUrl && (segment.type === 'attraction' || segment.type === 'accommodation' || segment.type === 'food')) {
+                segment.bookingUrl = await findBookingLink(segment.title, segment.location, segment.type);
+              }
+            }
+          }
         }
 
         return NextResponse.json(tripData, { status: 200 });

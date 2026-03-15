@@ -93,20 +93,20 @@ export default function Home() {
           </div>
 
           <div className="relative z-10 w-full max-w-5xl text-center mt-12">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-foreground/5 backdrop-blur-md border border-foreground/10 text-xs font-bold text-foreground/40 mb-8 uppercase tracking-[0.3em] animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-foreground/5 backdrop-blur-md border border-foreground/10 text-xs font-bold text-foreground/40 mb-8 uppercase tracking-[0.3em] fade-in-up">
               <Sparkles size={14} />
               <span>Personalized Exploration</span>
             </div>
 
-            <h1 className="text-6xl md:text-9xl font-bold tracking-tighter text-foreground mb-6 leading-[0.85] animate-in fade-in slide-in-from-bottom-6 duration-1000">
+            <h1 className="text-6xl md:text-9xl font-bold tracking-tighter text-foreground mb-6 leading-[0.85] fade-in-up [animation-delay:200ms]">
               Refreshing<br />your exploration<br />of the world
             </h1>
             
-            <p className="text-lg md:text-xl text-foreground/40 mb-12 max-w-xl mx-auto font-medium leading-relaxed animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
+            <p className="text-lg md:text-xl text-foreground/40 mb-12 max-w-xl mx-auto font-medium leading-relaxed fade-in-up [animation-delay:400ms]">
               A bespoke AI travel companion that understands your taste, budget, and curiosity.
             </p>
 
-            <div className="w-full max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-400">
+            <div className="w-full max-w-2xl mx-auto fade-in-up [animation-delay:600ms]">
               <div className="relative flex items-center bg-surface-card backdrop-blur-3xl border border-surface-hover shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] rounded-[32px] p-2 group transition-all hover:shadow-[0_48px_80px_-20px_rgba(0,0,0,0.12)]">
                 <input
                   type="text"
