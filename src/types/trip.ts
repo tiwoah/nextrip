@@ -11,6 +11,7 @@ export interface TripSegment {
   distanceToNext?: string;
   coordinates?: [number, number]; // [longitude, latitude]
   bookingUrl?: string;
+  currency?: string; // e.g. "USD", "EUR", "£"
 }
 
 export interface TripDay {
@@ -39,4 +40,5 @@ export interface TripData {
   };
   budget_categories: BudgetCategory[];
   days: TripDay[];
+  currency?: string;
 }

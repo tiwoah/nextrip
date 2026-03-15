@@ -6,9 +6,10 @@ interface TimelineProps {
   segments: TripSegment[];
   activeSegmentId?: string | null;
   onSegmentSelect?: (segmentId: string) => void;
+  currency?: string;
 }
 
-export const Timeline = ({ segments, activeSegmentId, onSegmentSelect }: TimelineProps) => {
+export const Timeline = ({ segments, activeSegmentId, onSegmentSelect, currency }: TimelineProps) => {
   return (
     <div className="relative pl-32 py-6 pb-20 max-w-2xl">
       {/* Central vertical line */}
@@ -54,6 +55,7 @@ export const Timeline = ({ segments, activeSegmentId, onSegmentSelect }: Timelin
                   confirmationCode={segment.confirmationCode}
                   isActive={isActive}
                   bookingUrl={segment.bookingUrl}
+                  currency={currency || segment.currency}
                 />
               </div>
 

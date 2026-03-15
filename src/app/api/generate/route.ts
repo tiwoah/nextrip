@@ -121,9 +121,10 @@ const responseSchema = {
           required: ["id", "dayLabel", "dateStr", "activitiesCount", "segments"],
           additionalProperties: false
         }
-      }
+      },
+      currency: { type: "string", description: "The currency symbol or 3-letter code (e.g. CAD, $, EUR, £, VND). Default to 'CAD' if not specified." }
     },
-    required: ["trip_id", "title", "dates", "overview", "budget_categories", "days"],
+    required: ["trip_id", "title", "dates", "overview", "budget_categories", "days", "currency"],
     additionalProperties: false
   }
 };
@@ -168,14 +169,17 @@ CRITICAL: All string values MUST be enclosed in double quotes. Never output unqu
 
 CRITICAL JSON STRUCTURE:
 - Use "days" for the itinerary array.
+- "currency" at the top level is MANDATORY. **Default to "CAD"** unless a specific local currency is more appropriate for the destination (e.g. "VND" for Vietnam, "EUR" for France).
 - Each day MUST have "id", "dayLabel", "dateStr", "activitiesCount", and "segments".
-- Each segment MUST have "id", "time", "type", "title", "location", "description", "cost", "confirmationCode", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl".
+- Each segment MUST have "id", "time", "type", "title", "location", "description", "cost", "confirmationCode", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl". Segment-level "currency" is optional.
+- Detect the appropriate currency based on the destination, but **default everything to CAD** ($CAD) if in doubt or if no specific currency is requested.
 
 EXAMPLE STRUCTURE:
 {
   "trip_id": "paris-trip",
   "title": "3 Days in Paris",
   "dates": "Aug 10-12, 2026",
+  "currency": "CAD",
   "overview": { "total_days": 3, "total_budget": 1000, "weather_summary": "Sunny" },
   "budget_categories": [{ "category": "Food", "allocated": 300, "spent": 0, "color": "#FF5733" }],
   "days": [

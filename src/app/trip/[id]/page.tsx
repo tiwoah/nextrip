@@ -238,10 +238,11 @@ export default function TripDashboard() {
               totalBudget={currentTrip.overview.total_budget}
               categories={categoriesForDisplay}
               spentSoFar={spentSoFar}
+              currency={currentTrip.currency}
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto no-scrollbar bg-surface-card/30">
+          <div className="flex-1 overflow-y-auto no-scrollbar bg-surface-card/30 transform-gpu isolate">
             <div className="p-6">
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-foreground/30">{activeDay.dayLabel} Itinerary</h2>
@@ -251,6 +252,7 @@ export default function TripDashboard() {
                 segments={activeDay.segments} 
                 activeSegmentId={activeSegmentId}
                 onSegmentSelect={setActiveSegmentId}
+                currency={currentTrip.currency}
               />
             </div>
           </div>

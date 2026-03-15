@@ -1,6 +1,7 @@
 import React from 'react';
 import { Plane, Utensils, BedDouble, ShoppingBag, Hourglass, Landmark } from 'lucide-react';
 import { Button } from '../core/Button';
+import { formatPrice } from '@/../lib/utils';
 
 export type ActivityType = 'transport' | 'attraction' | 'food' | 'accommodation' | 'shopping' | 'freetime';
 
@@ -15,6 +16,7 @@ interface ActivityCardProps {
   distance?: string;
   isActive?: boolean;
   bookingUrl?: string;
+  currency?: string;
 }
 
 const typeConfig = {
@@ -36,7 +38,8 @@ export const ActivityCard = ({
   confirmationCode,
   distance,
   isActive,
-  bookingUrl
+  bookingUrl,
+  currency
 }: ActivityCardProps) => {
   const config = typeConfig[type];
   const Icon = config.icon;
@@ -56,9 +59,9 @@ export const ActivityCard = ({
             <h3 className="text-[18px] font-medium leading-[1.1] text-foreground font-sans truncate pr-4">
               {title}
             </h3>
-            {cost && (
+            {cost !== undefined && cost !== null && (
               <span className="text-sm font-medium text-foreground whitespace-nowrap">
-                ${cost}
+                {formatPrice(cost, currency)}
               </span>
             )}
           </div>

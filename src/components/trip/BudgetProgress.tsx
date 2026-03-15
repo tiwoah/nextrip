@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatPrice } from '@/../lib/utils';
 
 interface CategoryBudget {
   category: string;
@@ -12,9 +13,10 @@ interface BudgetProgressProps {
   categories: CategoryBudget[];
   spentSoFar?: number;
   compact?: boolean;
+  currency?: string;
 }
 
-export const BudgetProgress = ({ totalBudget, categories, spentSoFar, compact }: BudgetProgressProps) => {
+export const BudgetProgress = ({ totalBudget, categories, spentSoFar, compact, currency }: BudgetProgressProps) => {
   const totalSpent = typeof spentSoFar === 'number' ? spentSoFar : categories.reduce((acc, curr) => acc + curr.spent, 0);
   const percentageTotal = Math.min((totalSpent / totalBudget) * 100, 100);
   
@@ -38,12 +40,12 @@ export const BudgetProgress = ({ totalBudget, categories, spentSoFar, compact }:
         <div>
           <p className={`text-sm text-text-secondary font-medium ${compact ? 'mb-0' : 'mb-1'}`}>Total Budget</p>
           <h3 className={`font-semibold text-foreground tracking-tight ${compact ? 'text-lg' : 'text-2xl'}`}>
-            ${totalBudget.toLocaleString()}
+            {formatPrice(totalBudget, currency)}
           </h3>
         </div>
         <div className="text-right">
           <span className={`text-sm font-medium ${statusColor}`}>
-            ${totalSpent.toLocaleString()} / ${totalBudget.toLocaleString()} {typeof spentSoFar === 'number' ? 'spent so far' : 'spent'}
+            {formatPrice(totalSpent, currency)} / {formatPrice(totalBudget, currency)} {typeof spentSoFar === 'number' ? 'spent so far' : 'spent'}
           </span>
         </div>
       </div>
@@ -70,7 +72,7 @@ export const BudgetProgress = ({ totalBudget, categories, spentSoFar, compact }:
                     {cat.category}
                   </span>
                   <span className="font-mono text-text-secondary">
-                    ${cat.spent} <span className="text-text-tertiary">/ ${cat.allocated}</span>
+                    {formatPrice(cat.spent, currency)} <span className="text-text-tertiary">/ {formatPrice(cat.allocated, currency)}</span>
                   </span>
                 </div>
                 <div className="h-1.5 w-full bg-surface-hover rounded-full overflow-hidden">
