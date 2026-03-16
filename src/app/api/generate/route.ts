@@ -28,7 +28,8 @@ interface AviationStackFlight {
 async function fetchTicketmasterEvents(city: string) {
   if (!ticketmasterKey) return [];
   try {
-    const response = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?city=${city}&apikey=${ticketmasterKey}&size=5`);
+    // Search for both events and specifically attractions
+    const response = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?city=${encodeURIComponent(city)}&apikey=${ticketmasterKey}&size=20&sort=relevance,desc`);
     const data = await response.json();
     return data._embedded?.events || [];
   } catch (error) {
@@ -37,10 +38,11 @@ async function fetchTicketmasterEvents(city: string) {
   }
 }
 
-async function fetchFlights(departure: string, arrival: string) {
+async function fetchFlightsForTrip(departure: string, arrival: string) {
   if (!aviationstackKey) return [];
   try {
-    const response = await fetch(`http://api.aviationstack.com/v1/flights?access_key=${aviationstackKey}&dep_iata=${departure}&arr_iata=${arrival}&limit=5`);
+    // Search for flights with a limit to get some options
+    const response = await fetch(`http://api.aviationstack.com/v1/flights?access_key=${aviationstackKey}&dep_iata=${departure}&arr_iata=${arrival}&limit=10`);
     const data = await response.json();
     return data.data || [];
   } catch (error) {
@@ -90,7 +92,7 @@ async function withConcurrency<T, R>(
   return results;
 }
 
-function normalizeLonLat(coords: unknown): LonLat | null {
+function normalizeLonLat(coords: unknown, reference?: LonLat | null): LonLat | null {
   if (!Array.isArray(coords) || coords.length !== 2) return null;
   const a = Number(coords[0]);
   const b = Number(coords[1]);
@@ -101,6 +103,14 @@ function normalizeLonLat(coords: unknown): LonLat | null {
 
   if (looksLonLat && !looksLatLon) return [a, b];
   if (looksLatLon && !looksLonLat) return [b, a];
+  
+  // If ambiguous (both values in [-90, 90]), use reference point if provided
+  if (looksLonLat && looksLatLon && reference) {
+    const distAB = Math.pow(a - reference[0], 2) + Math.pow(b - reference[1], 2);
+    const distBA = Math.pow(b - reference[0], 2) + Math.pow(a - reference[1], 2);
+    return distAB < distBA ? [a, b] : [b, a];
+  }
+
   if (looksLonLat && looksLatLon) return [a, b]; // ambiguous, default to lon/lat
 
   return null;
@@ -204,10 +214,15 @@ export async function POST(req: Request) {
     const cityMatch = prompt.match(/\b(?:in|to|at)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i);
     const city = cityMatch ? cityMatch[1] : 'New York';
 
-    // Fetch external data in parallel (small but free speedup)
-    const [events, flights] = await Promise.all([
+    // Extract departure city (common patterns: "from X", "starting in X", etc.)
+    const departureMatch = prompt.match(/\b(?:from|starting in|departing from)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i);
+    const departureCity = departureMatch ? departureMatch[1] : 'New York';
+
+    // Fetch external data and geocode city in parallel
+    const [events, flights, cityCoords] = await Promise.all([
       fetchTicketmasterEvents(city),
-      fetchFlights('JFK', 'LAX'),
+      fetchFlightsForTrip(departureCity, city),
+      geocodeNominatim(city)
     ]);
 
     const apiData = {
@@ -221,11 +236,13 @@ CRITICAL:
 - Use "days" for the itinerary array.
 - "currency" at the top level is MANDATORY. **Default to "CAD"** unless a specific local currency is more appropriate for the destination (e.g. "VND" for Vietnam, "EUR" for France).
 - Each day MUST have "id", "dayLabel", "dateStr", "activitiesCount", and "segments".
-- Each segment MUST have "id", "time", "type", "title", "location", "description", "cost", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl".
-- Segment types must be one of: "transport", "accommodation", "food", "attraction", "freetime", "shopping".
-
 API Data with pre-verified booking URLs: ${JSON.stringify(apiData)}
-CRITICAL: If an event from Ticketmaster or a flight from AviationStack is relevant to a segment, use its provided URL in "bookingUrl". DO NOT hallucinate links. If no API data matches, leave "bookingUrl" as null.`;
+CRITICAL:
+- Destination City: ${city} (Approx coords: ${JSON.stringify(cityCoords)})
+- If an event from Ticketmaster or a flight from AviationStack is relevant to a segment, use its provided URL in "bookingUrl".
+- DO NOT hallucinate links. If no API data matches, set "bookingUrl" to null.
+- ANY URL starting with "http://localhost" is FORBIDDEN.
+- "coordinates" MUST be in [longitude, latitude] format (GeoJSON order). For example, London is approx [-0.1, 51.5]. ALWAYS use these provided city coords as a reference.`;
 
     const result = await model.generateContent([
       { text: systemInstruction },
@@ -240,50 +257,80 @@ CRITICAL: If an event from Ticketmaster or a flight from AviationStack is releva
       try {
         const tripData = JSON.parse(content);
 
-        // Fill missing coordinates so the Leaflet map can render markers.
-        // We cap lookups to keep latency reasonable.
+        // Post-process segments to match with API data for booking URLs
         try {
           const days = (tripData as any)?.days as any[] | undefined;
           if (Array.isArray(days)) {
-            const segments: any[] = days.flatMap((d) => (Array.isArray(d?.segments) ? d.segments : []));
+            for (const day of days) {
+              if (Array.isArray(day.segments)) {
+                for (const seg of day.segments) {
+                  // Skip if bookingUrl is already a valid external URL set by Gemini
+                  if (seg.bookingUrl && typeof seg.bookingUrl === 'string' && 
+                      seg.bookingUrl.startsWith('http') && 
+                      !seg.bookingUrl.includes('localhost') &&
+                      !seg.bookingUrl.includes('placeholder')) {
+                    continue;
+                  }
+                  
+                  // Reset any invalid URLs
+                  seg.bookingUrl = null;
 
-            // Normalize any model-provided coordinates (often returned as [lat, lon]).
-            for (const seg of segments) {
-              const normalized = normalizeLonLat(seg?.coordinates);
-              seg.coordinates = normalized; // may become null
-            }
+                  // Normalize coordinates to ensure [lon, lat] order
+                  if (seg.coordinates) {
+                    const normalized = normalizeLonLat(seg.coordinates, cityCoords);
+                    if (normalized) {
+                      seg.coordinates = normalized;
+                    }
+                  }
 
-            const missing = segments.filter((s) => !Array.isArray(s?.coordinates) || s.coordinates.length !== 2);
-
-            const cityHint = typeof city === 'string' ? city : '';
-            const queries = Array.from(
-              new Set(
-                missing
-                  .map((s) => String(s?.location || '').trim())
-                  .filter(Boolean)
-                  .map((loc) => (cityHint && !loc.toLowerCase().includes(cityHint.toLowerCase()) ? `${loc}, ${cityHint}` : loc))
-              )
-            ).slice(0, 18);
-
-            const cache = new Map<string, LonLat | null>();
-            const coordsList = await withConcurrency(queries, 3, async (q) => {
-              if (cache.has(q)) return cache.get(q)!;
-              const coords = await geocodeNominatim(q);
-              cache.set(q, coords);
-              return coords;
-            });
-            queries.forEach((q, i) => cache.set(q, coordsList[i]));
-
-            for (const seg of missing) {
-              const rawLoc = String(seg?.location || '').trim();
-              if (!rawLoc) continue;
-              const q = cityHint && !rawLoc.toLowerCase().includes(cityHint.toLowerCase()) ? `${rawLoc}, ${cityHint}` : rawLoc;
-              const coords = cache.get(q) ?? null;
-              if (coords) seg.coordinates = coords;
+                  // Normalize activity types to ensure they match our UI config
+                  const validTypes = ["transport", "accommodation", "food", "attraction", "freetime", "shopping"];
+                  if (!validTypes.includes(seg.type)) {
+                    // Try to map common aliases or default to freetime
+                    const typeLower = String(seg.type).toLowerCase();
+                    if (typeLower.includes("transport") || typeLower.includes("flight") || typeLower.includes("drive")) seg.type = "transport";
+                    else if (typeLower.includes("hotel") || typeLower.includes("stay") || typeLower.includes("bed")) seg.type = "accommodation";
+                    else if (typeLower.includes("eat") || typeLower.includes("restaurant") || typeLower.includes("dinner")) seg.type = "food";
+                    else if (typeLower.includes("visit") || typeLower.includes("sight") || typeLower.includes("tour")) seg.type = "attraction";
+                    else if (typeLower.includes("shop") || typeLower.includes("buy")) seg.type = "shopping";
+                    else seg.type = "freetime";
+                  }
+                  
+                  // For attraction segments, try to match with Ticketmaster events
+                  if (seg.type === 'attraction' || seg.type === 'shopping') {
+                    const segTitle = seg.title?.toLowerCase() || '';
+                    const segLocation = seg.location?.toLowerCase() || '';
+                    
+                    const eventMatch = events.find((event: TicketmasterEvent) => {
+                      const eventName = event.name?.toLowerCase() || '';
+                      // Simple fuzzy match: check if words overlap
+                      const eventWords = eventName.split(/\s+/).filter(w => w.length > 3);
+                      return eventWords.some(word => segTitle.includes(word) || segLocation.includes(word)) ||
+                             eventName.includes(segTitle) || segTitle.includes(eventName);
+                    });
+                    
+                    if (eventMatch?.url) {
+                      seg.bookingUrl = eventMatch.url;
+                    }
+                  }
+                  
+                  // For transport segments, try to match with flights
+                  else if (seg.type === 'transport' && (seg.title?.toLowerCase().includes('flight') || seg.description?.toLowerCase().includes('flight'))) {
+                    // Aviationstack links are not always direct booking links, 
+                    // so we'll use a search link if available or a reliable fallback
+                    if (flights.length > 0) {
+                      // Construct a Google Flights search link as a reliable booking destination
+                      const dep = departureCity.toUpperCase().substring(0, 3); // Simple extraction
+                      const arr = city.toUpperCase().substring(0, 3);
+                      seg.bookingUrl = `https://www.google.com/travel/flights?q=Flights%20to%20${encodeURIComponent(city)}%20from%20${encodeURIComponent(departureCity)}`;
+                    }
+                  }
+                }
+              }
             }
           }
         } catch (e) {
-          console.warn('Geocoding failed:', e);
+          console.warn('Post-processing booking URLs failed:', e);
         }
 
         return NextResponse.json(tripData, { status: 200 });

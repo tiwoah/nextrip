@@ -39,8 +39,8 @@ export const ActivityCard = ({
   bookingUrl,
   currency
 }: ActivityCardProps) => {
-  const config = typeConfig[type];
-  const Icon = config.icon;
+  const config = typeConfig[type as keyof typeof typeConfig] || typeConfig.freetime;
+  const Icon = config.icon || Hourglass;
 
   return (
     <div className={`bg-surface-card rounded-[16px] p-5 transition-transform duration-200 hover:scale-[1.02] cursor-grab active:cursor-grabbing hover:shadow-md relative border border-transparent hover:border-event-pilot-blue/20 ${isActive ? 'ring-2 ring-event-pilot-blue/40' : ''}`}>
