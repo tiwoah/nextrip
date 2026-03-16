@@ -11,7 +11,7 @@ import { TripSegment } from '@/types/trip';
 
 function BoundsComponent({ segments }: { segments: TripSegment[] }) {
   const map = useMap();
-  
+
   useEffect(() => {
     const features = segments.filter((s) => s.coordinates && s.coordinates.length === 2);
     if (features.length > 0) {
@@ -28,14 +28,14 @@ export default function Map({ segments }: { segments: TripSegment[] }) {
   const initialLng = features[0]?.coordinates?.[0] || -122.4194;
 
   return (
-    <MapContainer 
-      center={[initialLat, initialLng]} 
-      zoom={11} 
+    <MapContainer
+      center={[initialLat, initialLng]}
+      zoom={11}
       style={{ width: '100%', height: '100%' }}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <BoundsComponent segments={segments} />
       {features.map((seg, i) => {
@@ -50,10 +50,10 @@ export default function Map({ segments }: { segments: TripSegment[] }) {
             </svg>
           </div>
         `;
-        
+
         return (
-          <Marker 
-            key={seg.id} 
+          <Marker
+            key={seg.id}
             position={[seg.coordinates![1], seg.coordinates![0]]}
             icon={L.divIcon({
               html: iconHtml,

@@ -1,27 +1,17 @@
-import OpenAI from 'openai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY is not configured in the environment." }, { status: 500 });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE') {
+      return NextResponse.json({ error: "GEMINI_API_KEY is not configured in the environment." }, { status: 500 });
     }
 
-    const baseURL = "https://vjioo4r1vyvcozuj.us-east-2.aws.endpoints.huggingface.cloud/v1";
-    const openai = new OpenAI({
-      apiKey: apiKey,
-      baseURL: baseURL,
-    });
-
-    const body = await req.json();
-    const { messages } = body;
-
-    if (!messages || !Array.isArray(messages)) {
-      return NextResponse.json({ error: "Messages array is required." }, { status: 400 });
-    }
-
-    const systemPrompt = `You are a friendly and helpful travel assistant for Event-Pilot AI. Your goal is to gather all the necessary information from the user to plan a perfect trip.
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      systemInstruction: `You are a friendly and helpful travel assistant for Event-Pilot AI. Your goal is to gather all the necessary information from the user to plan a perfect trip.
 
 You MUST gather the following 7 pieces of information:
 1. Family size (who is traveling?)
@@ -43,96 +33,55 @@ CONVERSATION STYLE:
 - If the user provides multiple details, acknowledge briefly and ask for the next missing piece.
 - Once you have ALL 7 details, set "isComplete" to true and say something like "Creating your plan..."
 
-RESPONSE FORMAT:
-    You MUST respond with a RAW JSON object. DO NOT use markdown code blocks (\`\`\`json). DO NOT include any text before or after the JSON.
-
-EXAMPLE RESPONSE:
-{
-  "message": "Travel style? (e.g. relaxed, entertainment, luxury)",
-  "isComplete": false,
-  "collectedData": {
-    "familySize": "4 people",
-    "location": "Tokyo",
-    "budget": null,
-    "reason": null,
-    "preferences": null,
-    "dietary": null,
-    "dates": null
-  }
-}
-
-Current state of collected data should be inferred from the conversation history.`;
-
-    const response = await openai.chat.completions.create({
-      model: "openai/gpt-oss-120b",
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages
-      ],
-      max_tokens: 1000,
-      temperature: 0.7,
+You MUST respond with a RAW JSON object according to the schema.`,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: SchemaType.OBJECT,
+          properties: {
+            message: { type: SchemaType.STRING },
+            isComplete: { type: SchemaType.BOOLEAN },
+            collectedData: {
+              type: SchemaType.OBJECT,
+              properties: {
+                familySize: { type: SchemaType.STRING, nullable: true },
+                location: { type: SchemaType.STRING, nullable: true },
+                budget: { type: SchemaType.STRING, nullable: true },
+                reason: { type: SchemaType.STRING, nullable: true },
+                preferences: { type: SchemaType.STRING, nullable: true },
+                dietary: { type: SchemaType.STRING, nullable: true },
+                dates: { type: SchemaType.STRING, nullable: true }
+              }
+            }
+          },
+          required: ["message", "isComplete", "collectedData"]
+        }
+      }
     });
 
-    const content = response.choices[0].message.content;
-    const finishReason = response.choices[0].finish_reason;
+    const body = await req.json();
+    const { messages } = body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json({ error: "Messages array is required." }, { status: 400 });
+    }
+
+    // Adapt history for Gemini (roles: user, model)
+    const history = messages.slice(0, -1).map((m: any) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+    
+    const lastMessage = messages[messages.length - 1].content;
+
+    const chat = model.startChat({ history });
+    const result = await chat.sendMessage(lastMessage);
+    const response = await result.response;
+    const content = response.text();
 
     if (content) {
       try {
-        // Robust Extraction: Look for the first '{' and last '}'
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        let jsonToParse = jsonMatch ? jsonMatch[0] : content.trim();
-        
-        let parsed;
-        try {
-          parsed = JSON.parse(jsonToParse);
-        } catch (e) {
-          // If parse fails, attempt to strip trailing garbage one character at a time
-          let temp = jsonToParse.trim();
-          let success = false;
-          while (temp.length > 2) {
-            try {
-              parsed = JSON.parse(temp);
-              success = true;
-              break;
-            } catch (inner) {
-              temp = temp.slice(0, -1).trim();
-            }
-          }
-          if (!success) throw e;
-        }
-
-        // Fuzzy key mapper for corrupted message keys
-        const keys = Object.keys(parsed);
-        const corruptedMessageKey = keys.find(k => k.toLowerCase().includes('final') || k.toLowerCase().includes('message'));
-        
-        if (corruptedMessageKey && !parsed.message) {
-          parsed.message = parsed[corruptedMessageKey];
-          if (corruptedMessageKey.includes('<|message|>')) {
-             delete parsed[corruptedMessageKey];
-          }
-        }
-
-        // Final check for expected structure with robust defaults
-        if (typeof parsed.isComplete === 'undefined') {
-          parsed.isComplete = false;
-        }
-        
-        if (!parsed.message || typeof parsed.message !== 'string') {
-          parsed.message = "I'm sorry, I'm having trouble phrasing my response. Let's continue with your trip planning!";
-        }
-
-        if (!parsed.collectedData) {
-          parsed.collectedData = {
-            familySize: null,
-            location: null,
-            budget: null,
-            reason: null,
-            preferences: null,
-            dietary: null,
-            dates: null
-          };
-        }
-
+        const parsed = JSON.parse(content);
         return NextResponse.json(parsed, { status: 200 });
       } catch (parseError) {
         console.error("JSON Parse Error. Content received:", content);
@@ -142,18 +91,12 @@ Current state of collected data should be inferred from the conversation history
         }, { status: 500 });
       }
     } else {
-      throw new Error(`Empty response from OpenAI (Content is null/empty). Finish reason: ${finishReason}`);
+      throw new Error(`Empty response from Gemini.`);
     }
 
   } catch (error) {
     console.error("Chat API Error:", error);
     const message = error instanceof Error ? error.message : String(error);
-    
-    // Add more context for common errors
-    if (message.includes("404")) {
-      return NextResponse.json({ error: "Model or endpoint not found. Please check your configuration." }, { status: 404 });
-    }
-
     return NextResponse.json({ error: message || "Failed to process chat" }, { status: 500 });
   }
 }

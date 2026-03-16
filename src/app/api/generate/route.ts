@@ -1,7 +1,5 @@
-import OpenAI from 'openai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
-
-import { findBookingLink } from '@/lib/google-search';
 
 const ticketmasterKey = process.env.TICKETMASTER_API_KEY;
 const aviationstackKey = process.env.AVIATIONSTACK_API_KEY;
@@ -50,95 +48,89 @@ async function fetchFlights(departure: string, arrival: string) {
 }
 
 const responseSchema = {
-  name: "trip_itinerary",
-  strict: true,
-  schema: {
-    type: "object",
-    properties: {
-      trip_id: { type: "string" },
-      title: { type: "string" },
-      dates: { type: "string" },
-      overview: {
-        type: "object",
-        properties: {
-          total_days: { type: "number" },
-          total_budget: { type: "number" },
-          weather_summary: { type: "string" }
-        },
-        required: ["total_days", "total_budget", "weather_summary"],
-        additionalProperties: false
+  description: "Travel itinerary schema",
+  type: SchemaType.OBJECT,
+  properties: {
+    trip_id: { type: SchemaType.STRING },
+    title: { type: SchemaType.STRING },
+    dates: { type: SchemaType.STRING },
+    overview: {
+      type: SchemaType.OBJECT,
+      properties: {
+        total_days: { type: SchemaType.NUMBER },
+        total_budget: { type: SchemaType.NUMBER },
+        weather_summary: { type: SchemaType.STRING }
       },
-      budget_categories: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            category: { type: "string" },
-            allocated: { type: "number" },
-            spent: { type: "number" },
-            color: { type: "string" }
-          },
-          required: ["category", "allocated", "spent", "color"],
-          additionalProperties: false
-        }
-      },
-      days: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            dayLabel: { type: "string" },
-            dateStr: { type: "string" },
-            activitiesCount: { type: "number" },
-            segments: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  time: { type: "string" },
-                  type: { type: "string", enum: ["transport", "accommodation", "food", "attraction", "freetime", "shopping"] },
-                  title: { type: "string" },
-                  location: { type: "string" },
-                  description: { type: ["string", "null"] },
-                  cost: { type: ["number", "null"] },
-                  travelModeToNext: { type: ["string", "null"], enum: ["walk", "drive", "transit", null] },
-                  distanceToNext: { type: ["string", "null"] },
-                  coordinates: {
-                    type: ["array", "null"],
-                    items: { type: "number" },
-                    description: "[longitude, latitude]"
-                  },
-                  bookingUrl: { type: ["string", "null"] }
-                },
-                required: ["id", "time", "type", "title", "location", "description", "cost", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl"],
-                additionalProperties: false
-              }
-            }
-          },
-          required: ["id", "dayLabel", "dateStr", "activitiesCount", "segments"],
-          additionalProperties: false
-        }
-      },
-      currency: { type: "string", description: "The currency symbol or 3-letter code (e.g. CAD, $, EUR, £, VND). Default to 'CAD' if not specified." }
+      required: ["total_days", "total_budget", "weather_summary"],
     },
-    required: ["trip_id", "title", "dates", "overview", "budget_categories", "days", "currency"],
-    additionalProperties: false
-  }
+    budget_categories: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          category: { type: SchemaType.STRING },
+          allocated: { type: SchemaType.NUMBER },
+          spent: { type: SchemaType.NUMBER },
+          color: { type: SchemaType.STRING }
+        },
+        required: ["category", "allocated", "spent", "color"],
+      }
+    },
+    days: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          id: { type: SchemaType.STRING },
+          dayLabel: { type: SchemaType.STRING },
+          dateStr: { type: SchemaType.STRING },
+          activitiesCount: { type: SchemaType.NUMBER },
+          segments: {
+            type: SchemaType.ARRAY,
+            items: {
+              type: SchemaType.OBJECT,
+              properties: {
+                id: { type: SchemaType.STRING },
+                time: { type: SchemaType.STRING },
+                type: { type: SchemaType.STRING },
+                title: { type: SchemaType.STRING },
+                location: { type: SchemaType.STRING },
+                description: { type: SchemaType.STRING },
+                cost: { type: SchemaType.NUMBER },
+                travelModeToNext: { type: SchemaType.STRING },
+                distanceToNext: { type: SchemaType.STRING },
+                coordinates: {
+                  type: SchemaType.ARRAY,
+                  items: { type: SchemaType.NUMBER },
+                },
+                bookingUrl: { type: SchemaType.STRING }
+              },
+              required: ["id", "time", "type", "title", "location", "description", "cost", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl"],
+            }
+          }
+        },
+        required: ["id", "dayLabel", "dateStr", "activitiesCount", "segments"],
+      }
+    },
+    currency: { type: SchemaType.STRING }
+  },
+  required: ["trip_id", "title", "dates", "overview", "budget_categories", "days", "currency"],
 };
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY is not configured in the environment." }, { status: 500 });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE') {
+      return NextResponse.json({ error: "GEMINI_API_KEY is not configured in the environment." }, { status: 500 });
     }
 
-    const baseURL = "https://vjioo4r1vyvcozuj.us-east-2.aws.endpoints.huggingface.cloud/v1";
-    const openai = new OpenAI({
-      apiKey: apiKey,
-      baseURL: baseURL,
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: responseSchema as any,
+      }
     });
 
     const body = await req.json();
@@ -148,7 +140,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Prompt is required." }, { status: 400 });
     }
 
-    console.log("Generating trip for prompt:", prompt);
+    console.log("Generating trip with Gemini for prompt:", prompt);
 
     const cityMatch = prompt.match(/\b(?:in|to|at)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i);
     const city = cityMatch ? cityMatch[1] : 'New York';
@@ -162,125 +154,29 @@ export async function POST(req: Request) {
     };
 
     const systemInstruction = `You are an expert travel planner AI. Generate a realistic, logically sequenced trip itinerary in RAW JSON.
-Everything MUST be within a single JSON object.
 
-CRITICAL: All string values MUST be enclosed in double quotes. Never output unquoted text (e.g. use "description": "Some text" not "description": Some text).
-
-CRITICAL JSON STRUCTURE:
+CRITICAL:
 - Use "days" for the itinerary array.
 - "currency" at the top level is MANDATORY. **Default to "CAD"** unless a specific local currency is more appropriate for the destination (e.g. "VND" for Vietnam, "EUR" for France).
 - Each day MUST have "id", "dayLabel", "dateStr", "activitiesCount", and "segments".
-- Each segment MUST have "id", "time", "type", "title", "location", "description", "cost", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl". Segment-level "currency" is optional.
-- Detect the appropriate currency based on the destination, but **default everything to CAD** ($CAD) if in doubt or if no specific currency is requested.
+- Each segment MUST have "id", "time", "type", "title", "location", "description", "cost", "travelModeToNext", "distanceToNext", "coordinates", "bookingUrl".
+- Segment types must be one of: "transport", "accommodation", "food", "attraction", "freetime", "shopping".
 
-EXAMPLE STRUCTURE:
-{
-  "trip_id": "paris-trip",
-  "title": "3 Days in Paris",
-  "dates": "Aug 10-12, 2026",
-  "currency": "CAD",
-  "overview": { "total_days": 3, "total_budget": 1000, "weather_summary": "Sunny" },
-  "budget_categories": [{ "category": "Food", "allocated": 300, "spent": 0, "color": "#FF5733" }],
-  "days": [
-    {
-      "id": "day-1",
-      "dayLabel": "Day 1",
-      "dateStr": "Monday, Aug 10",
-      "activitiesCount": 1,
-      "segments": [{
-        "id": "seg-1",
-        "time": "09:00 AM",
-        "type": "attraction",
-        "title": "Eiffel Tower",
-        "location": "Paris",
-        "description": "Visit the icon.",
-        "cost": 25,
-        "travelModeToNext": "walk",
-        "distanceToNext": "500m",
-        "coordinates": [2.2945, 48.8584],
-        "bookingUrl": null
-      }]
-    }
-  ]
-}
+API Data with pre-verified booking URLs: ${JSON.stringify(apiData)}
+CRITICAL: If an event from Ticketmaster or a flight from AviationStack is relevant to a segment, use its provided URL in "bookingUrl". DO NOT hallucinate links. If no API data matches, leave "bookingUrl" as null.`;
 
-API Data: ${JSON.stringify(apiData)}
+    const result = await model.generateContent([
+      { text: systemInstruction },
+      { text: prompt }
+    ]);
 
-STRICT SCHEMA TO FOLLOW:
-${JSON.stringify(responseSchema.schema, null, 2)}`;
-
-    console.log("Calling OpenAI with baseURL:", baseURL);
-    const response = await openai.chat.completions.create({
-      model: "openai/gpt-oss-120b",
-      messages: [
-        { role: "system", content: systemInstruction },
-        { role: "user", content: prompt }
-      ],
-      max_tokens: 12000,
-      temperature: 0.7,
-    });
-
-    const content = response.choices[0].message.content;
-    const finishReason = response.choices[0].finish_reason;
+    const response = await result.response;
+    const content = response.text();
 
     if (content) {
-      console.log("OpenAI response received successfully.");
+      console.log("Gemini response received successfully.");
       try {
-        // Robust Extraction: Look for the first '{' and last '}'
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        let jsonToParse = jsonMatch ? jsonMatch[0] : content.trim();
-
-        // Attempt to fix common LLM JSON mistakes: unquoted string values like "description": Some text
-        jsonToParse = jsonToParse.replace(/:\s*([A-Za-z][^,:\[\]{}"\n]*?)(\s*[,}\]])/g, (_, val, end) => {
-          if (val.trim() && !val.startsWith('"') && !val.startsWith('null') && !val.startsWith('true') && !val.startsWith('false') && isNaN(Number(val))) {
-            return `: "${val.trim().replace(/"/g, '\\"')}"${end}`;
-          }
-          return `: ${val}${end}`;
-        });
-
-        let tripData: Record<string, unknown> | null = null;
-        try {
-          tripData = JSON.parse(jsonToParse);
-        } catch (e) {
-          // Truncation recovery: progressively strip from end to find valid JSON
-          let temp = jsonToParse.trim();
-          let success = false;
-          while (temp.length > 2) {
-            try {
-              tripData = JSON.parse(temp);
-              success = true;
-              break;
-            } catch {
-              temp = temp.slice(0, -1).trim();
-            }
-          }
-          if (!success) throw e;
-        }
-
-        // Normalize hallway-hallucinated keys
-        if (tripData!.itineraries && !tripData!.days) {
-          console.log("Mapping hallucinated 'itineraries' key to 'days'");
-          tripData!.days = tripData!.itineraries;
-          delete (tripData as Record<string, unknown>).itineraries;
-        }
-
-        if (!tripData) {
-          throw new Error("Failed to parse trip data.");
-        }
-
-        // Enhance booking links for attractions and accommodation if missing
-        if (process.env.GOOGLE_CLOUD_API_KEY && process.env.GOOGLE_SEARCH_ENGINE_ID) {
-          console.log("Enhancing booking links using Google Search...");
-          const days = (tripData!.days || []) as any[];
-          for (const day of days) {
-            for (const segment of day.segments) {
-              if (!segment.bookingUrl && (segment.type === 'attraction' || segment.type === 'accommodation' || segment.type === 'food')) {
-                segment.bookingUrl = await findBookingLink(segment.title, segment.location, segment.type);
-              }
-            }
-          }
-        }
-
+        const tripData = JSON.parse(content);
         return NextResponse.json(tripData, { status: 200 });
       } catch (parseError) {
         console.error("JSON Parse Error in Generation. Content received:", content);
@@ -290,20 +186,12 @@ ${JSON.stringify(responseSchema.schema, null, 2)}`;
         }, { status: 500 });
       }
     } else {
-      throw new Error(`Empty response from OpenAI during generation (Content is null/empty). Finish reason: ${finishReason}`);
+      throw new Error(`Empty response from Gemini during generation.`);
     }
 
   } catch (error) {
-    console.error("AI Generation Error Detailed:", error);
+    console.error("Gemini Generation Error Detailed:", error);
     const message = error instanceof Error ? error.message : String(error);
-
-    if (message.includes("ENOTFOUND") || message.includes("ECONNREFUSED")) {
-      const baseURL = "https://vjioo4r1vyvcozuj.us-east-2.aws.endpoints.huggingface.cloud/v1";
-      return NextResponse.json({
-        error: `Could not connect to the AI server at ${baseURL}. Please ensure the baseURL is correct and the server is running.`
-      }, { status: 502 });
-    }
-
     return NextResponse.json({ error: message || "Failed to generate trip" }, { status: 500 });
   }
 }
