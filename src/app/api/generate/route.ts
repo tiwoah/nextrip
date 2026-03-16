@@ -51,6 +51,20 @@ async function fetchFlightsForTrip(departure: string, arrival: string) {
   }
 }
 
+/**
+ * Geocodes a free‑form place query using the public Nominatim
+ * (OpenStreetMap) API and returns normalized [longitude, latitude]
+ * coordinates suitable for map rendering.
+ *
+ * - Sends a single-result search (`limit=1`) for the provided query.
+ * - Uses a required User-Agent header so requests are accepted by Nominatim.
+ * - Validates and parses the first result's `lon` and `lat` fields.
+ * - Returns `null` when the request fails, no result is found, or the
+ *   coordinates cannot be parsed as finite numbers.
+ *
+ * This helper is intentionally tolerant of network and data issues so
+ * that trip generation can continue even when geocoding is unavailable.
+ */
 async function geocodeNominatim(query: string): Promise<LonLat | null> {
   try {
     const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
