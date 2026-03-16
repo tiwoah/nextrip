@@ -46,7 +46,7 @@ interface TripState {
 export const useTripStore = create<TripState>((set, get) => ({
   currentTrip: null,
   currentPrompt: null,
-  savedTrips: loadSavedTrips(),
+  savedTrips: [],
   setTrip: (trip) => set({ currentTrip: trip }),
   setPrompt: (prompt) => set({ currentPrompt: prompt }),
   isLoading: false,
