@@ -29,7 +29,8 @@ export const mockTripData = {
           cost: 1200,
           confirmationCode: "H3K9M7",
           travelModeToNext: "drive" as const,
-          distanceToNext: "15 min"
+          distanceToNext: "15 min",
+          coordinates: [-122.4194, 37.7749] // SFO
         },
         {
           id: "seg-2",
@@ -41,7 +42,8 @@ export const mockTripData = {
           cost: 850,
           confirmationCode: "J5K2L1",
           travelModeToNext: "walk" as const,
-          distanceToNext: "5 min"
+          distanceToNext: "5 min",
+          coordinates: [-159.365, 21.875] // Kauai
         },
         {
           id: "seg-3",
@@ -50,7 +52,8 @@ export const mockTripData = {
           title: "Dinner at Duke's",
           location: "Kalapaki Beach",
           description: "Seafood & steaks. Try the Hula Pie.",
-          cost: 150
+          cost: 150,
+          coordinates: [-159.35, 21.87] // Near Kauai
         }
       ]
     },

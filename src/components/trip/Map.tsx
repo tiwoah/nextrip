@@ -39,28 +39,18 @@ export default function Map({ segments }: { segments: TripSegment[] }) {
       />
       <BoundsComponent segments={segments} />
       {features.map((seg, i) => {
-        const iconHtml = `
-          <div class="relative flex flex-col items-center">
-            <div style="background-color: #0066FF" class="text-white rounded-full w-6 h-6 flex items-center justify-center text-[10px] font-bold shadow-md relative z-10">
-              ${i + 1}
-            </div>
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="white" stroke="#0066FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin" style="margin-top: -8px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));">
-              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
-              <circle cx="12" cy="10" r="3"></circle>
-            </svg>
-          </div>
-        `;
+        const icon = L.divIcon({
+          html: `<div style="background-color: #0066FF; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">${i + 1}</div>`,
+          className: 'custom-marker',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
 
         return (
           <Marker
             key={seg.id}
             position={[seg.coordinates![1], seg.coordinates![0]]}
-            icon={L.divIcon({
-              html: iconHtml,
-              className: '',
-              iconSize: [28, 40],
-              iconAnchor: [14, 40]
-            })}
+            icon={icon}
           />
         );
       })}

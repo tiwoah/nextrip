@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 const ticketmasterKey = process.env.TICKETMASTER_API_KEY;
 const aviationstackKey = process.env.AVIATIONSTACK_API_KEY;
 
+type LonLat = [number, number]; // [longitude, latitude]
+
 // Types for API responses
 interface TicketmasterEvent {
   name: string;
@@ -45,6 +47,63 @@ async function fetchFlights(departure: string, arrival: string) {
     console.error('AviationStack API error:', error);
     return [];
   }
+}
+
+async function geocodeNominatim(query: string): Promise<LonLat | null> {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, {
+      headers: {
+        // Nominatim requires a valid UA
+        'User-Agent': 'event-pilot-ai/1.0',
+        'Accept': 'application/json',
+      },
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Array<{ lat?: string; lon?: string }>;
+    const first = data?.[0];
+    if (!first?.lat || !first?.lon) return null;
+    const lon = Number(first.lon);
+    const lat = Number(first.lat);
+    if (Number.isNaN(lon) || Number.isNaN(lat)) return null;
+    return [lon, lat];
+  } catch {
+    return null;
+  }
+}
+
+async function withConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length) as R[];
+  let idx = 0;
+  const workers = Array.from({ length: Math.max(1, concurrency) }, async () => {
+    while (idx < items.length) {
+      const cur = idx++;
+      results[cur] = await fn(items[cur]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+function normalizeLonLat(coords: unknown): LonLat | null {
+  if (!Array.isArray(coords) || coords.length !== 2) return null;
+  const a = Number(coords[0]);
+  const b = Number(coords[1]);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+
+  const looksLonLat = Math.abs(a) <= 180 && Math.abs(b) <= 90;
+  const looksLatLon = Math.abs(a) <= 90 && Math.abs(b) <= 180;
+
+  if (looksLonLat && !looksLatLon) return [a, b];
+  if (looksLatLon && !looksLonLat) return [b, a];
+  if (looksLonLat && looksLatLon) return [a, b]; // ambiguous, default to lon/lat
+
+  return null;
 }
 
 const responseSchema = {
@@ -145,8 +204,11 @@ export async function POST(req: Request) {
     const cityMatch = prompt.match(/\b(?:in|to|at)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i);
     const city = cityMatch ? cityMatch[1] : 'New York';
 
-    const events = await fetchTicketmasterEvents(city);
-    const flights = await fetchFlights('JFK', 'LAX');
+    // Fetch external data in parallel (small but free speedup)
+    const [events, flights] = await Promise.all([
+      fetchTicketmasterEvents(city),
+      fetchFlights('JFK', 'LAX'),
+    ]);
 
     const apiData = {
       events: events.map((e: TicketmasterEvent) => ({ name: e.name, url: e.url, date: e.dates?.start?.localDate })),
@@ -177,6 +239,53 @@ CRITICAL: If an event from Ticketmaster or a flight from AviationStack is releva
       console.log("Gemini response received successfully.");
       try {
         const tripData = JSON.parse(content);
+
+        // Fill missing coordinates so the Leaflet map can render markers.
+        // We cap lookups to keep latency reasonable.
+        try {
+          const days = (tripData as any)?.days as any[] | undefined;
+          if (Array.isArray(days)) {
+            const segments: any[] = days.flatMap((d) => (Array.isArray(d?.segments) ? d.segments : []));
+
+            // Normalize any model-provided coordinates (often returned as [lat, lon]).
+            for (const seg of segments) {
+              const normalized = normalizeLonLat(seg?.coordinates);
+              seg.coordinates = normalized; // may become null
+            }
+
+            const missing = segments.filter((s) => !Array.isArray(s?.coordinates) || s.coordinates.length !== 2);
+
+            const cityHint = typeof city === 'string' ? city : '';
+            const queries = Array.from(
+              new Set(
+                missing
+                  .map((s) => String(s?.location || '').trim())
+                  .filter(Boolean)
+                  .map((loc) => (cityHint && !loc.toLowerCase().includes(cityHint.toLowerCase()) ? `${loc}, ${cityHint}` : loc))
+              )
+            ).slice(0, 18);
+
+            const cache = new Map<string, LonLat | null>();
+            const coordsList = await withConcurrency(queries, 3, async (q) => {
+              if (cache.has(q)) return cache.get(q)!;
+              const coords = await geocodeNominatim(q);
+              cache.set(q, coords);
+              return coords;
+            });
+            queries.forEach((q, i) => cache.set(q, coordsList[i]));
+
+            for (const seg of missing) {
+              const rawLoc = String(seg?.location || '').trim();
+              if (!rawLoc) continue;
+              const q = cityHint && !rawLoc.toLowerCase().includes(cityHint.toLowerCase()) ? `${rawLoc}, ${cityHint}` : rawLoc;
+              const coords = cache.get(q) ?? null;
+              if (coords) seg.coordinates = coords;
+            }
+          }
+        } catch (e) {
+          console.warn('Geocoding failed:', e);
+        }
+
         return NextResponse.json(tripData, { status: 200 });
       } catch (parseError) {
         console.error("JSON Parse Error in Generation. Content received:", content);
