@@ -1,3 +1,16 @@
+# NextTrip
+<p align="center">
+  Plan your NexTrip with our AI powered travel planner
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/AI-Powered-black" />
+  <img src="https://img.shields.io/badge/Status-Completed-blue" />
+  <img src="https://img.shields.io/badge/Frontend-Leaflet-blue" />
+  <img src="https://img.shields.io/badge/APIs-Ticketmaster%20%7C%20AviationStack%20%7C%20Hotel-orange" />
+  <img src="https://img.shields.io/badge/License-MIT-lightgrey" />
+</p>
+
 ## Overview
 NexTrip is an AI-powered travel planner that converts a single prompt into a complete itinerary, combining flights, hotels, events, and activities in one place.
 
